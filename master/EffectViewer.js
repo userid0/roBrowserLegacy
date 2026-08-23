@@ -157478,6 +157478,15 @@ var init_PacketStructure = __esmMin((() => {
 		pkt_buf.writeULong(this.MyGID);
 		return pkt_buf;
 	};
+	PACKET.CZ.REQ_JOIN_GUILD2 = function PACKET_CZ_REQ_JOIN_GUILD2() {
+		this.name = "";
+	};
+	PACKET.CZ.REQ_JOIN_GUILD2.prototype.build = function() {
+		const pkt_buf = new BinaryWriter(26);
+		pkt_buf.writeShort(2326);
+		pkt_buf.writeString(this.name, 24);
+		return pkt_buf;
+	};
 	PACKET.CZ.JOIN_GUILD = function PACKET_CZ_JOIN_GUILD() {
 		this.GDID = 0;
 		this.answer = 0;
@@ -245168,6 +245177,25 @@ var init_Guild = __esmMin((() => {
 			Network.sendPacket(pkt);
 		}
 		/**
+		* Send an invitation to the player by name
+		*
+		* @param {string} target character name
+		*
+		* @note Sends CZ.REQ_JOIN_GUILD2 (0x916), which is only valid for
+		*   PACKETVER >= 20120131 (length table defines 0x916 from that date).
+		*   Older clients can't invite by name — see REVIEW.md (Packet changes /
+		*   PACKETVER range).
+		*/
+		static requestPlayerInvitationByName(name) {
+			if (PacketVerManager_default.value < 20120131) {
+				ChatBox_default.addText("Guild invite by name requires client 2012-01-31 or newer.", ChatBox_default.TYPE.ERROR, ChatBox_default.FILTER.PUBLIC_LOG);
+				return;
+			}
+			const pkt = new PACKET.CZ.REQ_JOIN_GUILD2();
+			pkt.name = name;
+			Network.sendPacket(pkt);
+		}
+		/**
 		* Send a guild alliance to a target player
 		*
 		* @param {number} target account id
@@ -246819,7 +246847,7 @@ function renderLayer$2(layer, spr, pal, sizeScale, pos, alpha) {
 	SpriteRenderer.image.texture = frame.texture;
 	SpriteRenderer.render(false);
 }
-var RAG_TICK_MS$2, FADEOUT_TAIL_MS$3, EMIT_STOP_BEFORE_END_MS$2, FLAKE_LIFE_MS, FLAKE_FADEIN_MS, FLAKE_FADEOUT_START_MS, SCATTER_RADIUS_CELLS$2, SPAWN_HEIGHT_MIN_CELLS$2, FALL_SPEED_CELLS_PER_MS, _instance$4, _mapName$5, _isStopping$2, SnowWeatherEffect;
+var RAG_TICK_MS$2, FADEOUT_TAIL_MS$3, EMIT_STOP_BEFORE_END_MS$2, FLAKE_LIFE_MS, FLAKE_FADEIN_MS, FLAKE_FADEOUT_START_MS, SCATTER_RADIUS_CELLS$2, SPAWN_HEIGHT_MIN_CELLS$2, FALL_SPEED_CELLS_PER_MS, SPR_PATH, _instance$4, _mapName$5, _isStopping$2, SnowWeatherEffect;
 var init_SnowWeather = __esmMin((() => {
 	init_Client();
 	init_Renderer();
@@ -246836,6 +246864,7 @@ var init_SnowWeather = __esmMin((() => {
 	SCATTER_RADIUS_CELLS$2 = 60;
 	SPAWN_HEIGHT_MIN_CELLS$2 = 18;
 	FALL_SPEED_CELLS_PER_MS = .1 / RAG_TICK_MS$2;
+	SPR_PATH = "data/sprite/ÀÌÆÑÆ®/ef_snow";
 	_instance$4 = null;
 	_mapName$5 = "";
 	_isStopping$2 = false;
@@ -246952,8 +246981,8 @@ var init_SnowWeather = __esmMin((() => {
 		}
 		render(gl, tick) {
 			if (!SessionStorage_default.Entity) return;
-			const spr = Client.loadFile("data/sprite/ÀÌÆÑÆ®/ef_snow.spr", null, null, { to_rgba: true });
-			const act = Client.loadFile("data/sprite/ÀÌÆÑÆ®/ef_snow.act");
+			const spr = Client.loadFile(SPR_PATH + ".spr", null, null, { to_rgba: true });
+			const act = Client.loadFile(SPR_PATH + ".act");
 			if (!spr || !act) return;
 			this.spr = spr;
 			this.act = act;
@@ -248227,6 +248256,17 @@ var init_ProcessCommand = __esmMin((() => {
 					GuildEngine.createGuild(matches[2]);
 					return;
 				}
+			}
+		},
+		guildinvite: {
+			description: "Invites the specified player to your guild",
+			callback: function(text) {
+				const matches = text.match(/^guildinvite\s+(.+)/);
+				if (matches && matches[1]) {
+					GuildEngine.requestPlayerInvitationByName(matches[1]);
+					return;
+				}
+				this.addText("Usage: /guildinvite <Character Name>", this.TYPE.INFO, this.FILTER.PUBLIC_LOG);
 			}
 		},
 		breakguild: {
@@ -309275,6 +309315,15 @@ var init_ScreenShot = __esmMin((() => {
 //#endregion
 //#region src/Controls/MapControl.js
 /**
+* Stop the camera rotation when the right button is released, even if the
+* release happens over a UI element that swallows the bubbling mouseup event.
+*/
+function onMouseUpCapture(event) {
+	if (event.which !== 3 || !Camera.action.active) return;
+	Cursor.setType(Cursor.ACTION.DEFAULT);
+	Camera.rotate(false);
+}
+/**
 * What to do when clicking on the map ?
 */
 function onMouseDown(event) {
@@ -309324,9 +309373,6 @@ function onMouseDown(event) {
 						SessionStorage_default.autoFollow = true;
 						onAutoFollow();
 					}
-					entityOver.onMouseDown();
-					entityOver.onFocus();
-					EntityManager.setFocusEntity(entityOver);
 				}
 				Cursor.setType(Cursor.ACTION.ROTATE);
 				Camera.rotate(true);
@@ -309531,6 +309577,7 @@ var init_MapControl = __esmMin((() => {
 			Renderer.canvas.addEventListener("drop", onDrop$6.bind(this));
 			window.addEventListener("mousedown", onMouseDown.bind(this));
 			window.addEventListener("mouseup", onMouseUp.bind(this));
+			window.addEventListener("mouseup", onMouseUpCapture, true);
 		}
 	};
 }));
